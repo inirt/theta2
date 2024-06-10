@@ -4,9 +4,13 @@ library(instrument)
 
 # install.packages("rstan", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
 
-library(devtools)
-load_all()
-install(dependencies = TRUE)
+# library(devtools)
+# load_all()
+# install(dependencies = TRUE)
+
+# install.packages('./case_study/instrument2/', type = 'source', repos = NULL)
+#
+# library(instrument)
 
 # ------------------------------------------------------------------------------
 # data
@@ -14,9 +18,61 @@ data(familyrisk)
 
 # ------------------------------------------------------------------------------
 # fit model
+model = 'theta1 = c(3:16)
+         theta2 = c(3:16)
+         theta3 = c(3:16)
+         theta1 ~ wave + (1 | id) + (wave | id)
+         theta2 ~ wave + (1 | id) + (wave | id)
+         theta3 ~ wave + (1 | id) + (wave | id)'
+
+# model = 'theta1 = c(3:16)
+#          theta2 = c(3:16)
+#          theta3 = c(3:16)
+#          theta1 ~ wave + (1 + wave | id)
+#          theta2 ~ wave + (1 + wave | id)
+#          theta3 ~ wave + (1 + wave | id)'
+
+model = 'theta1 = c(3:8)
+         theta2 = c(9:12)
+         theta3 = c(13:16)
+         thetag = theta1 + theta2 + theta3
+         thetag ~ wave + (1 | id) + (wave | id)'
+
+fit =
+  instrument::instrument(
+    data          = familyrisk,
+    model         = model,
+    iter_warmup   = 100,
+    iter_sampling = 100,
+    seed          = 12345
+  )
+
+
+
 # get this working on the cluster tomorrow
 # model = 'theta1 = c(3:16)
 #          theta1 ~ (1 | id) + wave'
+
+model = 'theta1 = c(3:16)
+         theta2 = c(3:16)
+         theta3 = c(3:16)'
+
+model = 'theta1 = c(3:16)
+         theta2 = c(3:16)
+         theta3 = c(3:16)
+         theta1 ~ wave + (1 + wave | id)
+         theta2 ~ wave + (1 + wave | id)
+         theta3 ~ wave + (1 + wave | id)'
+
+fit =
+  instrument(
+    data          = familyrisk,
+    model         = model,
+    seed          = 779422694,
+    iter_sampling = 100,
+    iter_warmup   = 100,
+    chains        = 1
+  )
 
 model = 'theta1 = c(3:16)
          theta2 = c(3:16)
@@ -31,7 +87,16 @@ model = 'theta1 = c(3:8)
          thetag = theta1 + theta2 + theta3
          thetag ~ wave + (1 + wave | id)'
 
-fit = instrument::instrument(data = familyrisk, model = model, iter = 1000)
+data = familyrisk; model = model; iter_warmup = 100; iter_sampling = 200; itype = '2pl';
+exploratory = TRUE; method = "hmc"; fweights = NULL; chains = 1
+
+fit = instrument(data = familyrisk, model = model, iter_warmup = 100, iter_sampling = 200, itype = '2pl',
+                 exploratory = TRUE, method = "hmc", fweights = NULL, chains = 1)
+
+fit = instrument(data = familyrisk, model = model, iter = 1000, itype = '2pl',
+                 exploratory = TRUE, method = "hmc", fweights = NULL, chains = 1)
+
+fit = instrument::instrument(data = familyrisk, model = model, iter = 10)
 
 model = 'theta1 = c(3:16)
          theta2 = c(3:16)

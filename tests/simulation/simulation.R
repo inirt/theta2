@@ -34,7 +34,7 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
   source("tests/simulation/sim_mirt_data.R", local = TRUE)
 
   # study level seed
-  
+
   # seed_study_level = tail(.Random.seed, 1)
 
   # replace this with parallely
@@ -51,7 +51,7 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
   estimates = foreach::foreach(i = iterators::icount(n_sim),
                                .packages = "theta2",
                                .export = "true_values") %dopar% {
-    
+
     # seed with formula (for random sampling using true values sampled earlier)
     i = 1
     seed_replication_level = i * 10000 / pi
@@ -89,7 +89,7 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
              theta3 ~ z1 + z2 + (1 + pred | school)
              alpha  ~ z1 + z2
              delta  ~ z1 + z2"
-    
+
     model = "theta1 = c(1:15)
              theta2 = c(1:15)
              theta3 = c(1:15)"
@@ -136,13 +136,27 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
     #          theta4 ~ z1 + z2 + z3 + (1 + age | school)
     #          alpha  ~ z1 + z2 + z3
     #          delta  ~ z1 + z2 + z3"
-    
-    # fit model
-    fit = theta2::theta2(data = data, model = model, itype = "2pl", 
-      exploratory = TRUE, method = "vb", iter = 15000, tol_rel_obj = 0.001)
 
-    fit = theta2::theta2(data = data, model = model, itype = "2pl", 
-      exploratory = TRUE, method = "hmc", iter = 500, chains = 1)
+    # fit model
+    data = data
+    model = model
+    iter_warmup = 10
+    iter_sampling = 20
+    seed = 12345
+    fit =
+      instrument::instrument(
+        data = data,
+        model = model,
+        iter_warmup = 10,
+        iter_sampling = 20,
+        seed = 12345
+      )
+
+    # fit = theta2::theta2(data = data, model = model, itype = "2pl",
+    #   exploratory = TRUE, method = "vb", iter = 15000, tol_rel_obj = 0.001)
+    #
+    # fit = theta2::theta2(data = data, model = model, itype = "2pl",
+    #   exploratory = TRUE, method = "hmc", iter = 500, chains = 1)
 
     # produce summary
     fit_smy = theta2::summary.theta2Obj(fit)
@@ -155,13 +169,13 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
 
     # temporary: evaluate model fit
     fit_smy[
-      intersect(grep('theta', parameter), grep(',2]', parameter)), 
+      intersect(grep('theta', parameter), grep(',2]', parameter)),
     ][
       , cor(mean, true)
     ]
 
     View(fit_smy[
-        grep('delta', parameter), 
+        grep('delta', parameter),
       ])
 
     fit_smy[
@@ -185,22 +199,22 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
     ]
 
     fit_smy[
-        intersect(grep('delta', parameter)), 
+        intersect(grep('delta', parameter)),
       ][
         , cor(mean, true)
       ]
 
     fit_smy[
-        intersect(grep('delta', parameter), grep(',3]', parameter)), 
+        intersect(grep('delta', parameter), grep(',3]', parameter)),
       ][
         , cor(mean, true)
       ]
 
     theta_est = matrix(rstan::summary(fit[['stanfit']], pars = c('theta'))$summary[,1], ncol = 3, byrow = TRUE)
     cor(theta_est[,1], sim_data$theta[,1])
-    cor(sim_data$theta[,1], 
+    cor(sim_data$theta[,1],
     fit_smy[
-        intersect(grep('theta', parameter), grep(',1]', parameter)), 
+        intersect(grep('theta', parameter), grep(',1]', parameter)),
       ][,2]
     )
     cor(theta_est[,2], sim_data$theta[,2])
@@ -210,7 +224,7 @@ make_parallel_compute = function(n_sim = 100, n_cores = parallel::detectCores())
     cor(
       sim_data$theta[,3],
       true[
-        intersect(grep('theta', parameter), grep(',3]', parameter)), 
+        intersect(grep('theta', parameter), grep(',3]', parameter)),
         true
       ]
     )

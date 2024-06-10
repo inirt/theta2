@@ -21,12 +21,16 @@
 #' @export
 instrument = function(data,
                       model,
-                      itype = '2pl',
-                      exploratory = TRUE,
-                      method = "hmc",
-                      fweights = NULL,
+                      seed,
+                      iter_sampling,
+                      iter_warmup,
                       chains = 1,
-                      ...) {
+                      fweights = NULL) {
+
+  itype = '2pl'
+  exploratory = TRUE
+  method = "hmc"
+  # fweights = NULL
 
   # item_id = NULL
   # predictors = NULL
@@ -153,6 +157,8 @@ instrument = function(data,
   N_long = N*J
 
   y = as.vector(irt_data)
+
+  fweights = rep(fweights, J)
 
   # alpha and delta
   if(any(itype >= 2)) {
@@ -298,6 +304,7 @@ instrument = function(data,
 
   Lzeta = 0
   z = array(0, dim = c(N, 0))
+  zLong = array(0, dim = c(N_long, Lzeta))
   Lzeta_sd = 0
   zeta_sd_ind = array(0, dim = c(0))
   zeta_sd_ind_diag = array(0, dim = c(0, 0))
@@ -547,10 +554,16 @@ instrument = function(data,
     nn = nn[y_nonMiss]
     jj = jj[y_nonMiss]
     y = y[y_nonMiss]
-    xLong = matrix(rep(t(x), J),
-                   ncol = ncol(x),
-                   byrow = TRUE
-                   )[y_nonMiss, , drop = FALSE]
+    fweights = fweights[y_nonMiss]
+    if(ncol(x) == 0) {
+      xLong = matrix(nrow = sum(y_nonMiss), ncol = ncol(x), byrow = TRUE)
+    } else {
+      xLong = matrix(rep(t(x), J),
+                     ncol = ncol(x),
+                     byrow = TRUE
+                     )[y_nonMiss, , drop = FALSE]
+    }
+
 
     if(!is.null(unlist(predictors_ranef))) {
       zLong = matrix(rep(t(z), J),
@@ -684,32 +697,62 @@ instrument = function(data,
   }
 
   # Independent random effects in the theta regression (theta ~ rand1 + rand2 + ....)
-  if(!is.null(unlist(predictors_ranef))) {
-    regress = 1
-    start_index = 1
-    zeta_dstart = rep(1, D)
-    zeta_dend = numeric(D)
-    p_ind = 1
-    for(d in 1:D) { # insert which_ thing here (equivalent to correlated case)
-      if(which_dim_ind_reg[d] > 0) {
-        zeta_dstart[d] = 1
-        zeta_dend[d] = 1 + length(predictors_ranef[[p_ind]]) - 1
-        # start_index = start_index + length(predictors_ranef[[p_ind]])
-        p_ind = p_ind + 1
+  if(irt_model$h2_dims == 0) {
+    if(!is.null(unlist(predictors_ranef))) {
+      regress = 1
+      start_index = 1
+      zeta_dstart = rep(1, D)
+      zeta_dend = numeric(D)
+      p_ind = 1
+      for(d in 1:D) { # insert which_ thing here (equivalent to correlated case)
+        if(which_dim_ind_reg[d] > 0) {
+          zeta_dstart[d] = 1
+          zeta_dend[d] = 1 + length(predictors_ranef[[p_ind]]) - 1
+          # start_index = start_index + length(predictors_ranef[[p_ind]])
+          p_ind = p_ind + 1
+        }
       }
+      zeta_dstart = array(zeta_dstart, dim = D)
+      zeta_dend = array(zeta_dend, dim = D)
+      # Lzeta_sd = length(unique(ranef_id))
+      # zeta_sd_ind = ranef_id
+    } else {
+      Lzeta = 0
+      # Lzeta_sd = 0
+      # zeta_sd_ind = array(0, dim = c(0))
+      # z = matrix(0, nrow = N, ncol = Lzeta)
+      zeta_dstart = array(0, dim = c(0))
+      zeta_dend = array(0, dim = c(0))
     }
-    zeta_dstart = array(zeta_dstart, dim = D)
-    zeta_dend = array(zeta_dend, dim = D)
-    # Lzeta_sd = length(unique(ranef_id))
-    # zeta_sd_ind = ranef_id
   } else {
-    Lzeta = 0
-    # Lzeta_sd = 0
-    # zeta_sd_ind = array(0, dim = c(0))
-    # z = matrix(0, nrow = N, ncol = Lzeta)
-    zeta_dstart = array(0, dim = c(0))
-    zeta_dend = array(0, dim = c(0))
+    if(!is.null(unlist(predictors_ranef))) {
+      regress = 1
+      start_index = 1
+      zeta_dstart = rep(1, 1)
+      zeta_dend = numeric(1)
+      p_ind = 1
+      # for(d in 1:1) { # insert which_ thing here (equivalent to correlated case)
+        # if(which_dim_ind_reg[d] > 0) {
+          zeta_dstart[1] = 1
+          zeta_dend[1] = 1 + length(predictors_ranef[[p_ind]]) - 1
+          # start_index = start_index + length(predictors_ranef[[p_ind]])
+          # p_ind = p_ind + 1
+        # }
+      # }
+      zeta_dstart = array(zeta_dstart, dim = 1)
+      zeta_dend = array(zeta_dend, dim = 1)
+      # Lzeta_sd = length(unique(ranef_id))
+      # zeta_sd_ind = ranef_id
+    } else {
+      Lzeta = 0
+      # Lzeta_sd = 0
+      # zeta_sd_ind = array(0, dim = c(0))
+      # z = matrix(0, nrow = N, ncol = Lzeta)
+      zeta_dstart = array(0, dim = c(0))
+      zeta_dend = array(0, dim = c(0))
+    }
   }
+
 
   if(!is.null(unlist(predictors_ranef_corr))) {
     regress = 1
@@ -780,6 +823,7 @@ instrument = function(data,
         nn = nn,
         jj = jj,
         y = y,
+        fweights = fweights,
         itype = itype,
         any_eta3pl = any_eta3pl,
         nEta3pl = nEta3pl,
@@ -794,7 +838,6 @@ instrument = function(data,
         beta_dend = beta_dend,
         zeta_dstart = zeta_dstart,
         zeta_dend = zeta_dend,
-        fweights = fweights,
         # x_miss = x_miss,
         nDelta_r = nDelta_r,
         nAlpha_r = nAlpha_r,
@@ -1000,6 +1043,7 @@ instrument = function(data,
         # zeta_sd_ind_diag_32 = NULL
 
 
+
     standata = list(
         N = N,
         J = J,
@@ -1014,9 +1058,11 @@ instrument = function(data,
         Ncateg_max = Ncateg_max,
         Ncategi = Ncategi,
         N_long = N_long,
+        Ncategi_jj = Ncategi_jj,
         nn = nn,
         jj = jj,
         y = y,
+        fweights = fweights,
         itype = itype,
         any_eta3pl = any_eta3pl,
         nEta3pl = nEta3pl,
@@ -1034,7 +1080,6 @@ instrument = function(data,
         beta_dend = beta_dend,
         zeta_dstart = zeta_dstart,
         zeta_dend = zeta_dend,
-        fweights = fweights,
         # x_miss = x_miss,
         nDelta_r = nDelta_r,
         nAlpha_r = nAlpha_r,
@@ -1046,6 +1091,38 @@ instrument = function(data,
         which_dim_fixed_reg_sort = which_dim_fixed_reg_sort,
         which_dim_ind_reg = which_dim_ind_reg,
         which_dim_ind_reg_sort = which_dim_ind_reg_sort,
+
+        rand_ind_g1  = rand_ind_g1,
+        rand_ind_g2  = rand_ind_g2,
+        rand_ind_g3  = rand_ind_g3,
+        rand_ind_g4  = rand_ind_g4,
+        rand_ind_g5  = rand_ind_g5,
+        rand_ind_g6  = rand_ind_g6,
+        rand_ind_g7  = rand_ind_g7,
+        rand_ind_g8  = rand_ind_g8,
+        rand_ind_g9  = rand_ind_g9,
+        rand_ind_g10 = rand_ind_g10,
+        rand_ind_g11 = rand_ind_g11,
+        rand_ind_g12 = rand_ind_g12,
+        rand_ind_g13 = rand_ind_g13,
+        rand_ind_g14 = rand_ind_g14,
+        rand_ind_g15 = rand_ind_g15,
+        rand_ind_g16 = rand_ind_g16,
+        rand_ind_g17 = rand_ind_g17,
+        rand_ind_g18 = rand_ind_g18,
+        rand_ind_g19 = rand_ind_g19,
+        rand_ind_g20 = rand_ind_g20,
+        rand_ind_g21 = rand_ind_g21,
+        rand_ind_g22 = rand_ind_g22,
+        rand_ind_g23 = rand_ind_g23,
+        rand_ind_g24 = rand_ind_g24,
+        rand_ind_g25 = rand_ind_g25,
+        rand_ind_g26 = rand_ind_g26,
+        rand_ind_g27 = rand_ind_g27,
+        rand_ind_g28 = rand_ind_g28,
+        rand_ind_g29 = rand_ind_g29,
+        rand_ind_g30 = rand_ind_g30,
+        rand_ind_g31 = rand_ind_g31,
 
         Lzeta    = Lzeta,
         Lzeta_2  = Lzeta_2,
@@ -1101,6 +1178,8 @@ instrument = function(data,
         Laeta_cor = Laeta_cor,
         Ldeta_cor = Ldeta_cor,
         z = z,
+        z_2 = z_2,
+        z_3 = z_3,
 
         zLong    = zLong,
         zLong_2  = zLong_2,
@@ -1135,8 +1214,6 @@ instrument = function(data,
         zLong_31 = zLong_31,
         zLong_32 = zLong_32,
 
-        z_2 = z_2,
-        z_3 = z_3,
         ar = ar,
         dr = dr,
 
@@ -1245,22 +1322,27 @@ instrument = function(data,
         cor_z_item_elem_ind_2 = cor_z_item_elem_ind_2,
         cor_z_item_ind_3 = cor_z_item_ind_3,
         cor_z_item_elem_ind_3 = cor_z_item_elem_ind_3,
+
         Laeta_sd = Laeta_sd,
         alindex = alindex,
         aeta_sd_ind = aeta_sd_ind,
         cor_a_item_ind = cor_a_item_ind,
         cor_a_item_elem_ind = cor_a_item_elem_ind,
+
         Ldeta_sd = Ldeta_sd,
         dlindex = dlindex,
         deta_sd_ind = deta_sd_ind,
         cor_d_item_ind = cor_d_item_ind,
         cor_d_item_elem_ind = cor_d_item_elem_ind,
+
         z_c = z_c,
         z_c_2 = z_c_2,
         z_c_3 = z_c_3,
+
         z_cLong = z_cLong,
         z_cLong_2 = z_cLong_2,
         z_cLong_3 = z_cLong_3,
+
         a_c = a_c,
         d_c = d_c
       )
@@ -1281,9 +1363,11 @@ instrument = function(data,
         Ncateg_max = Ncateg_max,
         Ncategi = Ncategi,
         N_long = N_long,
+        Ncategi_jj = Ncategi_jj,
         nn = nn,
         jj = jj,
         y = y,
+        fweights = fweights,
         itype = itype,
         any_eta3pl = any_eta3pl,
         nEta3pl = nEta3pl,
@@ -1301,7 +1385,6 @@ instrument = function(data,
         beta_dend = beta_dend,
         zeta_dstart = zeta_dstart,
         zeta_dend = zeta_dend,
-        fweights = fweights,
         # x_miss = x_miss,
         nDelta_r = nDelta_r,
         nAlpha_r = nAlpha_r,
@@ -1348,17 +1431,37 @@ instrument = function(data,
   # Select the correct inirt implementation based on input parameters
   if(D == 1) {
 
-    modl = stanmodels$instrument_unidim
+    # model = instantiate::stan_package_model(
+    #   name = "instrument_unidim",
+    #   package = "instrument"
+    # )
+
+    # modl = stanmodels$instrument_unidim
     mtype = "unidim"
 
   } else if(D > 1 & h2_dims == 0) {
 
-    modl = stanmodels$instrument_mirt
+    model = instantiate::stan_package_model(
+      name = "instrument_mirt",
+      package = "instrument"
+    )
+
+    # modl = stanmodels$instrument_mirt
     mtype = "mdim"
 
   } else {    # D > 1 & h2_dims > 0
 
-    modl = stanmodels$instrument_soirt
+  # model = instantiate::stan_package_model(
+  #     name = "instrument_soirt",
+  #     package = "instrument"
+  #   )
+
+    model = instantiate::stan_package_model(
+      name = "instrument_soirt",
+      package = "instrument"
+    )
+
+    # modl = stanmodels$instrument_soirt
     mtype = "soirt"
 
   }
@@ -1366,11 +1469,13 @@ instrument = function(data,
   # Choose a model estimateion method: variational inference or HMC
   if(method[1] == "vb") {
 
-    out = rstan::vb(modl, data = standata, chains = chains, ...)
+    # out = rstan::vb(model, data = standata, chains = chains, ...)
 
   } else if(method[1] == "hmc") {
 
-    out = rstan::sampling(modl, data = standata, chains = chains, ...)
+    out = model$sample(data = standata, chains = chains,
+                       seed = seed, iter_sampling = iter_sampling,
+                       iter_warmup = iter_warmup)
 
   } else {
 

@@ -1,23 +1,23 @@
 #' Summarize a theta2 object
-#' 
+#'
 #' Produce summary data table for theta2 output.
-#' 
+#'
 #' @param object theta2Obj model object
 #' @param pars "default" will give the default parameters of the model.
 #' Other options will give only the specified vector of parameter names.
 #' For example, pars = c("theta", "alpha").
 #' @param probs probability vector for quantiles of posterior estiamtes
 #' @param ... not used
-#' 
+#'
 #' @return a `data.table` of draws
-#' 
+#'
 #' @importFrom rstan summary
 #' @export
-#' 
-summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50, 0.975), 
+#'
+summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50, 0.975),
   ...) {
-  
-  stanfit = object$stanfit
+
+  stanfit = brms::read_csv_as_stanfit(object$stanfit$output_files())
 
   # # column names
   # all_names = stanfit@sim$fnames_oi
@@ -25,11 +25,11 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
   # all_par_names = stanfit@model_pars
 
   # better column names
-  all_par_names = 
-    names(object$stanfit@par_dims)[
-      sapply(object$stanfit@par_dims,
+  all_par_names =
+    names(stanfit@par_dims)[
+      sapply(stanfit@par_dims,
              \(x) {
-               !any(x == 0) 
+               !any(x == 0)
              })
       ]
 
@@ -65,7 +65,7 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
 
   # # remove unused parameter names
   # if(pars == 'default') {
-  #   all_par_names = setdiff(all_par_names, c('alpha_l', 'eta3pl_l', 'delta_l', 
+  #   all_par_names = setdiff(all_par_names, c('alpha_l', 'eta3pl_l', 'delta_l',
   #     'eta3pl', 'db', 'ab', 'xb', 'nu', 'c', 'zeta_l', 'lp__')) # this was zeta_l[ ?? Why?
 
   #   # # More parameters to remove here
@@ -86,13 +86,13 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
 
   # # remove _l parameters (unformatted)
   # all_names = all_names[!grepl('_l', all_names)]
-  
+
   # extract draws and coerce to data.table (fast)
-  draws = data.table::as.data.table(rstan::extract(stanfit, pars = all_par_names, 
+  draws = data.table::as.data.table(rstan::extract(stanfit, pars = all_par_names,
     permute = FALSE))
 
   # parameters pivoted longer
-  draws = data.table::dcast(draws, iterations + chains ~ parameters, 
+  draws = data.table::dcast(draws, iterations + chains ~ parameters,
     value.var = 'value')
 
   par_names = colnames(draws)[-c(1:2)]
@@ -105,12 +105,12 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
   alpha_par_names = par_names[grep('alpha', par_names)]
 
   draws = draws[
-      , (alpha_par_names) := lapply(.SD, \(x) { exp(x) }), .SDcols = alpha_par_names
+      , (alpha_par_names) := lapply(.SD, \(x) { exp(x) - 1.0 }), .SDcols = alpha_par_names
     ]
 
   # posterior summary function
-  summary_instrumentObj = function(x, probs) { 
-      c(mean(x), sd(x), quantile(x, probs = probs)) 
+  summary_instrumentObj = function(x, probs) {
+      c(mean(x), sd(x), quantile(x, probs = probs))
     }
 
   # apply posterior summary to all parameters
@@ -124,7 +124,7 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
     ]
 
   # transpose data to long format (column are summary statistics)
-  draws = data.table::transpose(draws, keep.names = 'parameter', 
+  draws = data.table::transpose(draws, keep.names = 'parameter',
     make.names = 'summary')
 
   # let's inspect draws here and see if we can't take care of parameter names
@@ -134,11 +134,11 @@ summary.instrumentObj = function(object, pars = 'default', probs = c(0.025, 0.50
   # unique(str_split(draws[, parameter], '\\[', simplify = TRUE)[,1])
 
   # reorder result for convenience
-  draws = 
+  draws =
     draws[
         , match := order(match_order)
       ]
-  
+
   data.table::setorder(draws, match)
 
   draws[
